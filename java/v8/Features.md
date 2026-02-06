@@ -2,6 +2,8 @@
 
 Java 8 introduced several major enhancements to the Java programming language, focusing on functional programming, improved API usability, and performance optimizations.
 
+![img.png](features.png)
+
 ## Key Features Introduced in Java 8
 
 ### 1. **Lambda Expressions**
@@ -194,21 +196,307 @@ int result = nums.stream()
 
 ### 4. **Default Methods in Interfaces**
 
-Interfaces can now have default method implementations.
+Interfaces can now have **default** method implementations.
+
+#### 📌Why Default Methods Were Introduced
+
+**Before Java 8:**
+
+* Interfaces could only contain abstract methods.
+* If you added a new abstract method to an interface used by hundreds of classes, all implementations would break.
+
+**➡️ Default methods solve this problem**
+
+They allow you to extend interfaces without forcing all implementors to change.
 
 ```java
-default void log(String message) {
-    System.out.println("Log: " + message);
+interface Vehicle {
+    void start();
+
+    default void honk() {
+        System.out.println("Beep!");
+    }
 }
 ```
 
+
+#### ❗ The Diamond Problem in Interfaces**
+
+If a class implements multiple interfaces with same default method signature, you get a conflict.
+
+```java
+interface A {
+    default void hello() { System.out.println("A"); }
+}
+
+interface B {
+    default void hello() { System.out.println("B"); }
+}
+
+class C implements A, B {
+    // Compilation error unless overridden
+}
+
+// Fix by overriding:
+class C implements A, B {
+    @Override
+    public void hello() {
+        A.super.hello(); // or B.super.hello()
+    }
+}
+```
+
+
+#### 📌Default Method Resolution Rules (VERY IMPORTANT)
+
+Resolution Priority:
+
+1️⃣ **Class methods win over default methods**
+If a superclass defines a method, default methods are ignored.
+
+2️⃣ **More specific interface wins**
+If interface B extends A and both define default methods, B's version wins.
+
+3️⃣ **If still ambiguous → compile-time error → developer must override**
+
+
+#### 📌Performance Aspects of Default Methods
+
+Default methods are invoked via **invokeinterface** – same as other interface methods.
+
+Performance is slightly slower than direct class method calls, but negligible for real-world use.
+
+
+#### 📌When to Use Default Methods
+
+* ✔ Adding new methods to existing interfaces safely
+* ✔ Providing optional, common behavior
+* ✔ Improving readability (e.g., Collections API)
+* ✔ Evolving API without breaking clients
+
+
+#### 📌When NOT to Use Default Methods
+
+* ❌ When behavior should be enforced (use abstract methods instead)
+* ❌ When it leads to ambiguity/conflicts
+* ❌ When it violates interface segregation principle (keep interfaces focused)
+* ❌ When method requires state
+* ❌ Over-using them may lead to complicated inheritance graphs
+
+
+#### 📌**Can Default Methods Override Object Class Methods?**
+
+No. Default methods cannot override:
+
+* toString()
+* equals()
+* hashCode()
+
+```java
+java: default method toString in interface A overrides a member of java.lang.Object
+```
+
+**Why?**
+Because Object methods have the highest priority in method resolution.
+
+
+#### 📌Summary
+
+| Topic                                | Key Point                                             |
+| ------------------------------------ | ----------------------------------------------------- |
+| Why introduced?                      | To evolve interfaces without breaking implementations |
+| Diamond problem?                     | Must override when conflict occurs                    |
+| Resolution order                     | Class → more specific interface → else compile error  |
+| Override Object methods?             | Not allowed                                           |
+| Can have static and private methods? | Yes                                                   |
+| Good for?                            | Optional methods and backwards compatibility          |
+| Avoid when?                          | Method uses state or creates complex hierarchies      |
+
+
+
+
 ### 5. **Method References**
 
-Short-hand notation for lambda expressions.
+A shorthand syntax for writing lambda expressions. It is a compact way of saying:
+“Use this method as a lambda”
 
+Example:
 ```java
 list.forEach(System.out::println);
 ```
+
+is equivalent to:
+```java
+list.forEach(x -> System.out.println(x));
+```
+Both pass a Consumer<T> that prints each element.
+
+
+#### 📌Types of Method References
+Java defines exactly four method reference forms.
+
+**1️⃣ Reference to a Static Method**
+
+```java
+// Syntax: ClassName::staticMethod
+Function<String, Integer> toInteger = Integer::parseInt;
+// Equivalent to:
+s -> Integer.parseInt(s);
+```
+
+**2️⃣ Reference to an Instance Method of a Particular Object**
+
+```java
+// Syntax: instance::instanceMethod
+String prefix = "Hello, ";
+Function<String, String> concat = prefix::concat;
+// Equivalent to:
+s -> prefix.concat(s);
+```
+
+**3️⃣ Reference to an Instance Method of an Arbitrary Object of a Given Type**
+
+This one is confusing but extremely powerful. Java will treat the first argument of the functional interface as the target object.
+> “Call the instance method on the _first parameter_ of the functional interface.”
+> * The **actual object** on which the method is invoked is supplied **at runtime**
+> * The method reference itself does not specify which object
+> * Instead, the functional interface binds the first parameter as the object
+
+```java
+// Syntax: ClassName::instanceMethod
+Function<String, Integer> stringLength = String::length;
+// Equivalent to:
+s -> s.length();
+
+List<String> list = Arrays.asList("a", "bb", "ccc");
+list.sort(String::compareToIgnoreCase);
+// Equivalent to:
+list.sort((s1, s2) -> s1.compareToIgnoreCase(s2));
+
+BiPredicate<String, String> startsWith = String::startsWith;
+// Equivalent to:
+(s, prefix) -> s.startsWith(prefix);
+
+BiFunction<String, String, Boolean> contains = String::contains;
+// Equivalent to:
+(s, substr) -> s.contains(substr);
+
+Map<String, Integer> map = Map.of("a", 1, "bbb", 3);
+map.keySet().stream().max(String::compareTo);
+// Equivalent to:
+map.keySet().stream().max((s1, s2) -> s1.compareTo(s2));
+
+Arrays.sort(arr, String::compareToIgnoreCase);
+// Equivalent to:
+Arrays.sort(arr, (s1, s2) -> s1.compareToIgnoreCase(s2));
+```
+
+**4️⃣ Reference to a Constructor**
+
+```java
+// Syntax: ClassName::new
+Supplier<List<String>> listSupplier = ArrayList::new;
+// Equivalent to:
+() -> new ArrayList<>();
+
+// parameterized construction
+Function<Integer, int[]> arrayMaker = int[]::new;
+// Equivalent to:
+size -> new int[size];
+```
+
+
+#### 📌How Method References Are Mapped to Functional Interfaces
+
+A method reference must match a functional interface’s:
+
+* method signature (parameters)
+* return type
+
+Example:
+
+```java
+Function<String, Integer> f = Integer::valueOf;
+```
+
+Internally matches:
+
+```java
+Integer valueOf(String input);
+```
+
+If mismatch → compile error.
+
+
+#### ⭐ Internals: How JVM interprets this
+
+When you write: `String::trim`
+
+JVM interprets it as:
+
+1. A lambda factory is generated using `invokedynamic` 
+2. That factory binds the method reference to a functional interface 
+3. The functional interface’s **first argument** is assigned as the “receiver”
+4. A call is made as if: `receiver.trim()`
+
+
+#### 📌Common Pitfalls & Edge Cases
+
+**❌ Ambiguous method references**
+
+```java
+class Example {
+    public static void print(Integer i) { System.out.println("Integer: " + i); }
+    public static void print(String s) { System.out.println("String: " + s); }
+
+    public static void main(String[] args) {
+        // ❌ Ambiguous - compiler error
+        // Consumer<Object> c = Example::print;
+
+        // Resolved by casting
+        Consumer<Integer> c1 = Example::print;
+        Consumer<String> c2 = Example::print;
+    }
+}
+```
+
+**❌ Null references when using instance method references**
+
+```java
+String str = null;
+Function<String, Integer> func = str::length; // NullPointerException at runtime
+```
+
+**❌ Cannot reference methods with incompatible signatures**
+
+**❌ Cannot reference a private method of another class**
+
+
+#### 📌Best Practices
+
+* ✔ Use method references only when they improve readability
+* ✔ Prefer static method references for utility functions
+* ✔ Use constructor references in Streams (factory pattern)
+* ✔ Use `Class::instanceMethod` for comparators and common ops
+* ✔ Avoid when additional logic needed → use lambda instead
+
+
+#### 📌Summary
+
+| Form                                | Syntax                | Means                               |
+| ----------------------------------- | --------------------- | ----------------------------------- |
+| Static method                       | `Class::staticMethod` | `x -> Class.staticMethod(x)`        |
+| Instance of specific object         | `obj::method`         | `x -> obj.method(x)`                |
+| Instance method of arbitrary object | `Class::method`       | `(obj, arg..) -> obj.method(arg..)` |
+| Constructor                         | `Class::new`          | `args -> new Class(args)`           |
+
+
+> **Difference between `obj::method` and `Class::method`?**
+> * obj::method → bound to instance
+> * Class::method → first argument becomes target
+
+
+
 
 ### 6. **Optional Class**
 
@@ -248,6 +536,48 @@ Powerful utilities for collection transformations.
 Map<String, Long> countByName = list.stream()
     .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
 ```
+
+### 11. **Completable Future**
+
+A powerful API for asynchronous programming.
+
+```java
+CompletableFuture.supplyAsync(() -> "Hello")
+    .thenApply(String::toUpperCase)
+    .thenAccept(System.out::println);
+```
+
+### 12. **Static Method in Interfaces**
+
+Interfaces can now have static methods.
+
+```java
+interface Utility {
+    static void print(String message) {
+        System.out.println(message);
+    }
+}
+```
+
+### 13. **Type Annotations**
+
+Allows annotations to be applied to any use of a type.
+
+```java
+@NonNull String name;
+```
+
+### 14. **PermGen Removal**
+
+The permanent generation (PermGen) space was removed and replaced with Metaspace, which is native memory and can grow dynamically.
+
+
+### 15. **Parallel Array Operations**
+
+```java
+Arrays.parallelSort(array);
+```
+
 
 ---
 
